@@ -1,45 +1,40 @@
 # E-Commerce Dashboard
 
-Dashboard ini dibuat dengan Streamlit dan mengambil data dari file `dashboard/all_data.csv`.
+Dashboard ini dibuat menggunakan Streamlit dengan data utama di `dashboard/all_data.csv`.
 
-## Prasyarat
+## Setup Environment - Anaconda
 
-Pastikan sudah ada:
-
-- Python 3.10+ terinstal
-- `pip` tersedia di terminal
-
-## Cara Install Dependency
-
-1. Buka terminal atau command prompt di device.
-2. Masuk ke folder project ini dengan perintah `cd` ke lokasi folder `submission`.
-3. Jalankan perintah berikut untuk memasang dependency:
-
-```powershell
+```bash
+conda create --name main-ds python=3.9
+conda activate main-ds
 pip install -r requirements.txt
 ```
 
-Jika memakai virtual environment, aktifkan environment terlebih dahulu sebelum menjalankan perintah di atas.
+## Setup Environment - Shell/Terminal
 
-## Cara Menjalankan Dashboard
+Jika folder project sudah ada (seperti proyek ini), langsung masuk ke folder project lalu jalankan:
 
-Setelah dependency terpasang, jalankan Streamlit dari folder project yang sama:
-
-```powershell
-streamlit run dashboard\dashboard.py
+```bash
+pipenv install
+pipenv shell
+pip install -r requirements.txt
 ```
 
-Jika kamu berada di macOS atau Linux, gunakan separator folder `/` bila diperlukan, misalnya `dashboard/dashboard.py`.
+Jika mulai dari nol, bisa gunakan langkah berikut:
 
-Kalau file dashboard tidak ada di folder utama project kamu, sesuaikan path-nya dengan lokasi file `dashboard.py` yang kamu pakai.
-
-## Cara Menghentikan Dashboard
-
-Tekan:
-
-```powershell
-Ctrl + C
+```bash
+mkdir proyek_analisis_data
+cd proyek_analisis_data
+pipenv install
+pipenv shell
+pip install -r requirements.txt
 ```
 
-di terminal yang sedang menjalankan Streamlit.
+## Run Streamlit App
+
+Jalankan dari root folder project:
+
+```bash
+streamlit run dashboard/dashboard.py
+```
 

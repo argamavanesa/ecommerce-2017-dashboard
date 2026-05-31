@@ -14,16 +14,35 @@ st.set_page_config(
 
 sns.set(style="darkgrid")
 
-# Load Data
-DATA_PATH = Path(__file__).with_name("all_data.csv")
-
 
 @st.cache_data
 def load_data():
+    DATA_PATH = Path(__file__).with_name("all_data.csv")
     if not DATA_PATH.exists():
         return pd.DataFrame()
 
-    return pd.read_csv(DATA_PATH)
+    df = pd.read_csv(
+        DATA_PATH,
+        parse_dates=["order_purchase_timestamp"],
+        usecols=[
+            "order_id",
+            "customer_unique_id",
+            "order_purchase_timestamp",
+            "payment_value",
+            "review_score",
+            "review_creation_date",
+            "delivery_time",
+            "answer_time"
+        ]
+    )
+
+    # Filter langsung 2017
+    df = df[df["order_purchase_timestamp"].dt.year == 2017]
+
+    # Baru convert kolom tanggal lain (lebih ringan karena data sudah kecil)
+    df["review_creation_date"] = pd.to_datetime(df["review_creation_date"], errors="coerce")
+
+    return df
 
 
 df_all = load_data()
@@ -33,28 +52,9 @@ if df_all.empty:
     st.stop()
 
 
-date_columns = [
-    "order_purchase_timestamp",
-    "order_approved_at",
-    "order_delivered_carrier_date",
-    "order_delivered_customer_date",
-    "order_estimated_delivery_date",
-    "review_creation_date",
-    "review_answer_timestamp",
-]
-
-for col in date_columns:
-    df_all[col] = pd.to_datetime(df_all[col], format="mixed", errors="coerce")
-
-
-# Preparasi Data
-df_all = df_all[df_all["order_purchase_timestamp"].dt.year == 2017].copy()
-df_all = df_all.sort_values("order_purchase_timestamp")
-
-
 #agregasi data penjualan dan revenue secara bulanan
 
-df_monthly_sales = df_all.resample(rule='M', on='order_purchase_timestamp').agg({
+df_monthly_sales = df_all.resample(rule='ME', on='order_purchase_timestamp').agg({
     "order_id": "nunique",
     "payment_value": "sum"
 })
@@ -75,7 +75,7 @@ df_monthly_sales.rename(columns={
 df_review_2017 = df_all[df_all["review_creation_date"].dt.year == 2017].copy()
 
 # agregasi bulanan: jumlah review per bulan dan rata-rata review score per bulan
-df_monthly_review = df_review_2017.resample(rule='M', on='review_creation_date').agg({
+df_monthly_review = df_review_2017.resample(rule='ME', on='review_creation_date').agg({
     "order_id": "nunique",
     "review_score": "mean"
 })
@@ -106,7 +106,7 @@ df_review_distribution_2017.columns = ["review_score", "review_count"]
 df_operational_2017 = df_all[df_all["order_purchase_timestamp"].dt.year == 2017].copy()
 
 # agregasi bulanan
-monthly_operational_df = df_operational_2017.resample(rule='M', on='order_purchase_timestamp').agg({
+monthly_operational_df = df_operational_2017.resample(rule='ME', on='order_purchase_timestamp').agg({
     "order_id": "nunique",          # jumlah order
     "payment_value": "sum",        # jumlah nilai transaksi
     "delivery_time": "mean",        # rata-rata waktu pengiriman
@@ -131,8 +131,6 @@ monthly_operational_df["avg_payment_value"] = monthly_operational_df["avg_paymen
 monthly_operational_df["avg_delivery_time"] = monthly_operational_df["avg_delivery_time"].round(2)
 monthly_operational_df["avg_answer_time"] = monthly_operational_df["avg_answer_time"].round(2)
 monthly_operational_df["avg_review_score"] = monthly_operational_df["avg_review_score"].round(2)
-
-monthly_operational_df.head()
 
 operational_corr_df = monthly_operational_df[
     ["order_count", "avg_payment_value", "avg_delivery_time", "avg_answer_time", "avg_review_score"]
@@ -208,12 +206,34 @@ rfm_segment_counts = rfm_df["Customer_segment"].value_counts()
 st.title("Dashboard E-Commerce Public Dataset (2017)")
 st.caption("Ringkasan interaktif penjualan, kepuasan pelanggan, faktor operasional, dan segmentasi RFM.")
 
+# SIDEBAR FILTER - Month Selection
+st.sidebar.header("Filter")
+all_months = sorted(df_monthly_sales["order_month"].unique())
+selected_months = st.sidebar.multiselect(
+    "Pilih Bulan:",
+    options=all_months,
+    default=all_months,
+    key="month_filter"
+)
+
+# Filter data berdasarkan bulan yang dipilih
+if selected_months:
+    df_monthly_sales_filtered = df_monthly_sales[df_monthly_sales["order_month"].isin(selected_months)].copy()
+    df_monthly_review_filtered = df_monthly_review[df_monthly_review["review_month"].isin(selected_months)].copy()
+else:
+    df_monthly_sales_filtered = df_monthly_sales.copy()
+    df_monthly_review_filtered = df_monthly_review.copy()
+
+# Hitung KPI berdasarkan data yang difilter
+total_orders_filtered = int(df_monthly_sales_filtered["order_count"].sum())
+total_revenue_filtered = float(df_monthly_sales_filtered["revenue"].sum())
+avg_rating_filtered = float(df_monthly_review_filtered["avg_review_score"].mean())
 
 # KPI
 col1, col2, col3 = st.columns(3)
-col1.metric("Total Orders", f"{total_orders:,}")
-col2.metric("Revenue", f"{total_revenue:,.2f}")
-col3.metric("Avg Rating", f"{avg_rating:.2f}")
+col1.metric("Total Orders", f"{total_orders_filtered:,}")
+col2.metric("Revenue", f"{total_revenue_filtered:,.2f}")
+col3.metric("Avg Rating", f"{avg_rating_filtered:.2f}")
 
 st.markdown("---")
 
@@ -231,7 +251,7 @@ with tab_overview:
 
     with left_col:
         fig, ax = plt.subplots(figsize=(12, 5))
-        ax.plot(df_monthly_sales["order_month"], df_monthly_sales["order_count"], marker='o', linewidth=2)
+        ax.plot(df_monthly_sales_filtered["order_month"], df_monthly_sales_filtered["order_count"], marker='o', linewidth=2)
         ax.set_title("Month-over-Month Sales (2017)", fontsize=14)
         ax.set_xlabel("Month", fontsize=12)
         ax.set_ylabel("Jumlah Order", fontsize=12)
@@ -240,9 +260,13 @@ with tab_overview:
         st.pyplot(fig)
 
     with right_col:
-        st.info(f"Peak sales: {peak_sales_row['order_month']} ({int(peak_sales_row['order_count']):,} orders)")
-        st.info(f"Lowest sales: {lowest_sales_row['order_month']} ({int(lowest_sales_row['order_count']):,} orders)")
-        st.success(f"Revenue peak: {peak_revenue_row['order_month']} ({peak_revenue_row['revenue']:,.2f})")
+        if not df_monthly_sales_filtered.empty:
+            peak_sales_row_filt = df_monthly_sales_filtered.loc[df_monthly_sales_filtered["order_count"].idxmax()]
+            lowest_sales_row_filt = df_monthly_sales_filtered.loc[df_monthly_sales_filtered["order_count"].idxmin()]
+            peak_revenue_row_filt = df_monthly_sales_filtered.loc[df_monthly_sales_filtered["revenue"].idxmax()]
+            st.info(f"Peak sales: {peak_sales_row_filt['order_month']} ({int(peak_sales_row_filt['order_count']):,} orders)")
+            st.info(f"Lowest sales: {lowest_sales_row_filt['order_month']} ({int(lowest_sales_row_filt['order_count']):,} orders)")
+            st.success(f"Revenue peak: {peak_revenue_row_filt['order_month']} ({peak_revenue_row_filt['revenue']:,.2f})")
         st.info("Dashboard ini fokus pada tren 2017, customer satisfaction, operasional, dan RFM.")
 
 
@@ -251,7 +275,7 @@ with tab_sales:
 
     with sales_left:
         fig, ax = plt.subplots(figsize=(12, 5))
-        ax.plot(df_monthly_sales["order_month"], df_monthly_sales["order_count"], marker='o')
+        ax.plot(df_monthly_sales_filtered["order_month"], df_monthly_sales_filtered["order_count"], marker='o')
 
         ax.set_title("Month-over-Month Sales (2017)", fontsize=14)
         ax.set_xlabel("Month", fontsize=12)
@@ -261,7 +285,7 @@ with tab_sales:
         st.pyplot(fig)
 
         fig, ax = plt.subplots(figsize=(12, 5))
-        ax.plot(df_monthly_sales["order_month"], df_monthly_sales["revenue"], marker='o')
+        ax.plot(df_monthly_sales_filtered["order_month"], df_monthly_sales_filtered["revenue"], marker='o')
 
         ax.set_title("Month-over-Month Revenue (2017)", fontsize=14)
         ax.set_xlabel("Month", fontsize=12)
@@ -271,11 +295,15 @@ with tab_sales:
         st.pyplot(fig)
 
     with sales_right:
-        st.info(f"Lowest sales: {lowest_sales_row['order_month']} | {int(lowest_sales_row['order_count']):,} orders")
-        st.info(f"Highest sales: {peak_sales_row['order_month']} | {int(peak_sales_row['order_count']):,} orders")
-        st.info(f"Highest revenue: {peak_revenue_row['order_month']} | {peak_revenue_row['revenue']:,.2f}")
+        if not df_monthly_sales_filtered.empty:
+            lowest_sales_row_filt = df_monthly_sales_filtered.loc[df_monthly_sales_filtered["order_count"].idxmin()]
+            peak_sales_row_filt = df_monthly_sales_filtered.loc[df_monthly_sales_filtered["order_count"].idxmax()]
+            peak_revenue_row_filt = df_monthly_sales_filtered.loc[df_monthly_sales_filtered["revenue"].idxmax()]
+            st.info(f"Lowest sales: {lowest_sales_row_filt['order_month']} | {int(lowest_sales_row_filt['order_count']):,} orders")
+            st.info(f"Highest sales: {peak_sales_row_filt['order_month']} | {int(peak_sales_row_filt['order_count']):,} orders")
+            st.info(f"Highest revenue: {peak_revenue_row_filt['order_month']} | {peak_revenue_row_filt['revenue']:,.2f}")
         st.success("Tren: meningkat sepanjang 2017")
-        st.dataframe(df_monthly_sales[["order_month", "order_count", "revenue"]], use_container_width=True)
+        st.dataframe(df_monthly_sales_filtered[["order_month", "order_count", "revenue"]], use_container_width=True)
 
 
 with tab_customer:
@@ -283,7 +311,7 @@ with tab_customer:
 
     with customer_left:
         fig, ax = plt.subplots(figsize=(12, 5))
-        ax.plot(df_monthly_review["review_month"], df_monthly_review["review_count"], marker='o')
+        ax.plot(df_monthly_review_filtered["review_month"], df_monthly_review_filtered["review_count"], marker='o')
         ax.set_title("Jumlah Monthly Reviews (2017)", fontsize=14)
         ax.set_xlabel("Month", fontsize=12)
         ax.set_ylabel("Jumlah Reviews", fontsize=12)
@@ -292,7 +320,7 @@ with tab_customer:
         st.pyplot(fig)
 
         fig, ax = plt.subplots(figsize=(12, 5))
-        ax.plot(df_monthly_review["review_month"], df_monthly_review["avg_review_score"], marker='o')
+        ax.plot(df_monthly_review_filtered["review_month"], df_monthly_review_filtered["avg_review_score"], marker='o')
         ax.set_title("Rata-Rata Monthly Ratings (2017)", fontsize=14)
         ax.set_xlabel("Month", fontsize=12)
         ax.set_ylabel("Review Score", fontsize=12)
@@ -313,8 +341,11 @@ with tab_customer:
         ax.set_title("Distribusi Rating Review (2017)", fontsize=14)
         st.pyplot(fig)
 
-        st.info(f"Peak review volume: {peak_review_row['review_month']} ({int(peak_review_row['review_count']):,})")
-        st.info(f"Lowest avg rating: {lowest_rating_row['review_month']} ({lowest_rating_row['avg_review_score']:.2f})")
+        if not df_monthly_review_filtered.empty:
+            peak_review_row_filt = df_monthly_review_filtered.loc[df_monthly_review_filtered["review_count"].idxmax()]
+            lowest_rating_row_filt = df_monthly_review_filtered.loc[df_monthly_review_filtered["avg_review_score"].idxmin()]
+            st.info(f"Peak review volume: {peak_review_row_filt['review_month']} ({int(peak_review_row_filt['review_count']):,})")
+            st.info(f"Lowest avg rating: {lowest_rating_row_filt['review_month']} ({lowest_rating_row_filt['avg_review_score']:.2f})")
         st.success("Rating 4-5 masih dominan")
 
 
