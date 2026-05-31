@@ -51,3 +51,7 @@ streamlit run dashboard/dashboard.py
 - Conclution pertanyaan 2: Meskipun mayoritas pelanggan masih memberikan ulasan positif sepanjang 2017, rata-rata tingkat kepuasan menunjukkan tren penurunan secara bertahap. Hal ini mengindikasikan bahwa peningkatan volume transaksi belum sepenuhnya diimbangi dengan kualitas pengalaman pelanggan yang konsisten.
 - Conclution pertanyaan 3: Dari seluruh faktor operasional yang dianalisis, waktu pengiriman merupakan faktor yang paling berpengaruh terhadap kepuasan pelanggan. Semakin lama waktu pengiriman, semakin rendah tingkat kepuasan pelanggan, sehingga optimasi proses pengiriman menjadi prioritas utama untuk meningkatkan customer experience.
 
+## Tools
+* Python (Google Colab & VS Code)
+* Streamlit
+
