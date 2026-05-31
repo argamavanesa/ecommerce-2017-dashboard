@@ -1,4 +1,5 @@
 # E-Commerce Dashboard 2017
+![Dashboard Overview](dashboard_preview.png)
 
 ## Deskripsi Proyek
 
